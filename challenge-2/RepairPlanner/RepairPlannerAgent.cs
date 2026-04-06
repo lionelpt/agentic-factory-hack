@@ -56,6 +56,7 @@ public sealed class RepairPlannerAgent(
 
     public async Task<WorkOrder> PlanAndCreateWorkOrderAsync(
         DiagnosedFault fault,
+        bool persistWorkOrder = true,
         CancellationToken cancellationToken = default)
     {
         var requiredSkills = faultMapping.GetRequiredSkills(fault.FaultType);
@@ -77,8 +78,16 @@ public sealed class RepairPlannerAgent(
         // ??= means "assign only if null" (similar to Python's: x = x or default).
         workOrder.AssignedTo ??= selectedTechnician?.Id;
 
-        var createdId = await cosmosDb.CreateWorkOrderAsync(workOrder, cancellationToken);
-        workOrder.Id = createdId;
+        if (persistWorkOrder)
+        {
+            var createdId = await cosmosDb.CreateWorkOrderAsync(workOrder, cancellationToken);
+            workOrder.Id = createdId;
+        }
+        else
+        {
+            workOrder.Id = string.IsNullOrWhiteSpace(workOrder.Id) ? $"dryrun-{Guid.NewGuid():N}" : workOrder.Id;
+            logger.LogInformation("Dry-run enabled. Work order was generated but not persisted to Cosmos DB.");
+        }
 
         return workOrder;
     }

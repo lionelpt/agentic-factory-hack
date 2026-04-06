@@ -63,6 +63,7 @@ try
 
 	var appLogger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Program");
 	var planner = provider.GetRequiredService<RepairPlannerAgent>();
+	var isDryRun = args.Any(a => string.Equals(a, "--dry-run", StringComparison.OrdinalIgnoreCase));
 
 	var inputFault = await LoadFaultFromArgumentsAsync(args, appLogger)
 		?? new DiagnosedFault
@@ -74,7 +75,19 @@ try
 			Description = "Persistent vibration above threshold detected during drum rotation."
 		};
 
-	var createdWorkOrder = await planner.PlanAndCreateWorkOrderAsync(inputFault);
+	var createdWorkOrder = await planner.PlanAndCreateWorkOrderAsync(inputFault, persistWorkOrder: !isDryRun);
+
+	if (isDryRun)
+	{
+		appLogger.LogInformation("Dry-run mode active. No data was written to Cosmos DB.");
+		var json = JsonSerializer.Serialize(createdWorkOrder, new JsonSerializerOptions
+		{
+			WriteIndented = true
+		});
+		Console.WriteLine("Generated WorkOrder (dry-run):");
+		Console.WriteLine(json);
+	}
+
 	appLogger.LogInformation(
 		"Created work order {WorkOrderNumber} with id {WorkOrderId}",
 		createdWorkOrder.WorkOrderNumber,
