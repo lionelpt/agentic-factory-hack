@@ -19,17 +19,47 @@ var loggerFactory = LoggerFactory.Create(builder =>
 });
 
 var bootstrapLogger = loggerFactory.CreateLogger("Bootstrap");
+var isDryRun = args.Any(a => string.Equals(a, "--dry-run", StringComparison.OrdinalIgnoreCase));
 
 try
 {
-	var requiredEnv = GetRequiredEnvironmentVariables(
-	[
+	var inputFault = await LoadFaultFromArgumentsAsync(args, bootstrapLogger)
+		?? new DiagnosedFault
+		{
+			Id = Guid.NewGuid().ToString("N"),
+			MachineId = "TBM-1001",
+			FaultType = "building_drum_vibration",
+			Severity = "high",
+			Description = "Persistent vibration above threshold detected during drum rotation."
+		};
+
+	var requiredEnvNames = new[]
+	{
 		"AZURE_AI_PROJECT_ENDPOINT",
 		"MODEL_DEPLOYMENT_NAME",
 		"COSMOS_ENDPOINT",
 		"COSMOS_KEY",
 		"COSMOS_DATABASE_NAME"
-	]);
+	};
+
+	var requiredEnv = GetAvailableEnvironmentVariables(requiredEnvNames);
+	var hasAllRequiredEnv = requiredEnvNames.All(requiredEnv.ContainsKey);
+
+	if (isDryRun && !hasAllRequiredEnv)
+	{
+		bootstrapLogger.LogWarning(
+			"Dry-run local mode enabled because required environment variables are missing. Azure and Cosmos calls were skipped.");
+
+		var localWorkOrder = BuildLocalDryRunWorkOrder(inputFault);
+		Console.WriteLine("Generated WorkOrder (dry-run local mode):");
+		Console.WriteLine(JsonSerializer.Serialize(localWorkOrder, new JsonSerializerOptions { WriteIndented = true }));
+		return;
+	}
+
+	if (!hasAllRequiredEnv)
+	{
+		throw BuildMissingEnvironmentVariablesException(requiredEnvNames, requiredEnv);
+	}
 
 	var endpoint = requiredEnv["AZURE_AI_PROJECT_ENDPOINT"];
 	var modelDeploymentName = requiredEnv["MODEL_DEPLOYMENT_NAME"];
@@ -63,17 +93,6 @@ try
 
 	var appLogger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Program");
 	var planner = provider.GetRequiredService<RepairPlannerAgent>();
-	var isDryRun = args.Any(a => string.Equals(a, "--dry-run", StringComparison.OrdinalIgnoreCase));
-
-	var inputFault = await LoadFaultFromArgumentsAsync(args, appLogger)
-		?? new DiagnosedFault
-		{
-			Id = Guid.NewGuid().ToString("N"),
-			MachineId = "TBM-1001",
-			FaultType = "building_drum_vibration",
-			Severity = "high",
-			Description = "Persistent vibration above threshold detected during drum rotation."
-		};
 
 	var createdWorkOrder = await planner.PlanAndCreateWorkOrderAsync(inputFault, persistWorkOrder: !isDryRun);
 
@@ -97,33 +116,35 @@ try
 }
 catch (Exception ex)
 {
+	Console.Error.WriteLine($"RepairPlanner execution failed: {ex.Message}");
 	bootstrapLogger.LogError(ex, "RepairPlanner execution failed.");
 	Environment.ExitCode = 1;
 }
 
-static Dictionary<string, string> GetRequiredEnvironmentVariables(IReadOnlyList<string> names)
+static Dictionary<string, string> GetAvailableEnvironmentVariables(IReadOnlyList<string> names)
 {
 	var resolved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-	var missing = new List<string>();
 
 	foreach (var name in names)
 	{
 		var value = Environment.GetEnvironmentVariable(name);
 		if (string.IsNullOrWhiteSpace(value))
 		{
-			missing.Add(name);
 			continue;
 		}
 
 		resolved[name] = value;
 	}
 
-	if (missing.Count == 0)
-	{
-		return resolved;
-	}
+	return resolved;
+}
 
-	throw new InvalidOperationException(
+static Exception BuildMissingEnvironmentVariablesException(
+	IReadOnlyList<string> requiredNames,
+	IReadOnlyDictionary<string, string> available)
+{
+	var missing = requiredNames.Where(name => !available.ContainsKey(name));
+	return new InvalidOperationException(
 		$"Missing required environment variables: {string.Join(", ", missing)}");
 }
 
@@ -162,4 +183,56 @@ static async Task<DiagnosedFault?> LoadFaultFromArgumentsAsync(string[] args, IL
 	logger.LogInformation("Loaded diagnosed fault from {FaultFilePath}", filePath);
 
 	return fault;
+}
+
+static WorkOrder BuildLocalDryRunWorkOrder(DiagnosedFault fault)
+{
+	var mapping = new FaultMappingService();
+	var requiredSkills = mapping.GetRequiredSkills(fault.FaultType);
+	var requiredParts = mapping.GetRequiredParts(fault.FaultType);
+
+	var tasks = new List<RepairTask>
+	{
+		new()
+		{
+			Sequence = 1,
+			Title = "Prepare and isolate machine",
+			Description = $"Apply lockout-tagout and isolate machine {fault.MachineId}.",
+			EstimatedDurationMinutes = 20,
+			RequiredSkills = requiredSkills.ToList(),
+			SafetyNotes = "Follow lockout-tagout and PPE procedures."
+		},
+		new()
+		{
+			Sequence = 2,
+			Title = "Inspect and repair fault",
+			Description = $"Inspect and repair fault '{fault.FaultType}'.",
+			EstimatedDurationMinutes = 40,
+			RequiredSkills = requiredSkills.ToList(),
+			SafetyNotes = "Verify interlocks and guards before re-energizing."
+		}
+	};
+
+	return new WorkOrder
+	{
+		Id = $"dryrun-{Guid.NewGuid():N}",
+		WorkOrderNumber = $"WO-DRY-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}",
+		MachineId = fault.MachineId,
+		Title = $"Repair plan for {fault.FaultType}",
+		Description = fault.Description,
+		Type = "corrective",
+		Priority = string.IsNullOrWhiteSpace(fault.Severity) ? "medium" : fault.Severity,
+		Status = "open",
+		AssignedTo = null,
+		Notes = "Generated in local dry-run mode without Azure/Cosmos dependencies.",
+		EstimatedDuration = tasks.Sum(t => t.EstimatedDurationMinutes),
+		SourceFaultType = fault.FaultType,
+		PartsUsed = requiredParts.Select(partNumber => new WorkOrderPartUsage
+		{
+			PartId = partNumber,
+			PartNumber = partNumber,
+			Quantity = 1
+		}).ToList(),
+		Tasks = tasks
+	};
 }
