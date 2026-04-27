@@ -1,7 +1,7 @@
 import asyncio
 import os
 
-from agent_framework.azure import AzureAIClient
+from agent_framework.openai import OpenAIChatClient
 from azure.cosmos import CosmosClient
 from azure.identity.aio import AzureCliCredential
 from dotenv import load_dotenv
@@ -55,7 +55,7 @@ async def main():
     try:
         async with AzureCliCredential() as credential:
             async with (
-                AzureAIClient(credential=credential).create_agent(
+                OpenAIChatClient(credential=credential).as_agent(
                     name="AnomalyClassificationAgent",
                     description="Anomaly classification agent",
                     instructions="""You are a Anomaly Classification Agent evaluating machine anomalies for warning and critical threshold violations.

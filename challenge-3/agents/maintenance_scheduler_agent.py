@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 from typing import List
 
-from agent_framework.azure import AzureAIClient
+from agent_framework.openai import OpenAIChatClient
 from azure.ai.projects.aio import AIProjectClient
 from azure.identity.aio import AzureCliCredential, DefaultAzureCredential
 from dotenv import load_dotenv
@@ -83,7 +83,7 @@ Always respond in valid JSON format as requested."""
 
         # Use newer AzureAIClient pattern (matches anomaly_classification_agent.py)
         async with AzureCliCredential() as credential:
-            async with AzureAIClient(credential=credential).create_agent(
+            async with OpenAIChatClient(credential=credential).as_agent(
                 name="MaintenanceSchedulerAgent",
                 description="Predictive maintenance scheduling agent for tire manufacturing",
                 instructions=instructions,

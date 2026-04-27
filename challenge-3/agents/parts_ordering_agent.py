@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 from typing import List
 
-from agent_framework.azure import AzureAIClient
+from agent_framework.openai import OpenAIChatClient
 from azure.ai.projects.aio import AIProjectClient
 from azure.identity.aio import DefaultAzureCredential
 from dotenv import load_dotenv
@@ -85,9 +85,7 @@ Always respond in valid JSON format as requested."""
 
         credential = DefaultAzureCredential()
 
-        async with AzureAIClient(credential=credential).create_agent(
-            endpoint=self.project_endpoint,
-            model=self.deployment_name,
+        async with OpenAIChatClient(credential=credential).as_agent(
             name="PartsOrderingAgent",
             instructions=instructions,
         ) as agent:

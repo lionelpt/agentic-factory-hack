@@ -174,7 +174,7 @@ public static class RepairPlannerAgentFactory
             .AsBuilder()
             .UseOpenTelemetry()
             .Build()
-            .CreateAIAgent(
+            .AsAIAgent(
                 instructions: DefaultInstructions,
                 name: "RepairPlannerAgent",
                 tools: tools.Count > 0 ? tools : null);

@@ -240,7 +240,7 @@ static async Task<WorkflowResponse> ExecuteWorkflowAsync(
     logger.LogInformation("Workflow built with {Count} agents", executors.Count);
 
     // Execute the workflow
-    var run = await InProcessExecution.Default.StreamAsync<string>(workflow, input);
+    var run = await InProcessExecution.Default.RunStreamingAsync<string>(workflow, input);
 
 
 
