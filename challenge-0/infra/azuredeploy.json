@@ -349,65 +349,6 @@
       }
     },
     {
-      "type": "Microsoft.CognitiveServices/accounts/deployments",
-      "apiVersion": "2025-04-01-preview",
-      "name": "[format('{0}/{1}', variables('aiFoundryName'), 'gpt-4o-mini')]",
-      "sku": {
-        "capacity": 50,
-        "name": "GlobalStandard"
-      },
-      "properties": {
-        "model": {
-          "name": "gpt-4o-mini",
-          "format": "OpenAI",
-          "version": "2024-07-18"
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.CognitiveServices/accounts/deployments",
-      "apiVersion": "2025-04-01-preview",
-      "name": "[format('{0}/{1}', variables('aiFoundryName'), 'gpt-4.1')]",
-      "sku": {
-        "capacity": 50,
-        "name": "GlobalStandard"
-      },
-      "properties": {
-        "model": {
-          "name": "gpt-4.1",
-          "format": "OpenAI",
-          "version": "2025-04-14"
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryName'))]",
-        "[resourceId('Microsoft.CognitiveServices/accounts/deployments', variables('aiFoundryName'), 'gpt-4o-mini')]"
-      ]
-    },
-    {
-      "type": "Microsoft.CognitiveServices/accounts/deployments",
-      "apiVersion": "2025-04-01-preview",
-      "name": "[format('{0}/{1}', variables('aiFoundryName'), 'text-embedding-3-large')]",
-      "sku": {
-        "capacity": 10,
-        "name": "Standard"
-      },
-      "properties": {
-        "model": {
-          "name": "text-embedding-3-large",
-          "format": "OpenAI",
-          "version": "1"
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryName'))]",
-        "[resourceId('Microsoft.CognitiveServices/accounts/deployments', variables('aiFoundryName'), 'gpt-4.1')]"
-      ]
-    },
-    {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
       "name": "[guid(resourceId('Microsoft.Search/searchServices', variables('searchServiceName')), resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryName')), variables('cognitiveServicesUserRoleId'), 'search-to-cognitive')]",
