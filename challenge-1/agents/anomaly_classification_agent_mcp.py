@@ -89,6 +89,7 @@ async def main():
                         Output should be:
                         - alerts with format:
                             {
+                            "machineId": "<machine_id>",
                             "status": "high" | "medium",
                             "alerts": [ {"name": "metricName1", "severity": "threshold", "description": "metric1 exceeded value x}, { "name": "metricName2", ... ],
                             "summary": {

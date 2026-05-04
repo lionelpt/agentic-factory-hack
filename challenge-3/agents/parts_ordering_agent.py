@@ -262,20 +262,23 @@ async def main():
     database_name = os.getenv("COSMOS_DATABASE_NAME")
     foundry_project_endpoint = os.getenv("AI_FOUNDRY_PROJECT_ENDPOINT")
     deployment_name = os.getenv("MODEL_DEPLOYMENT_NAME", "gpt-4o")
-    app_insights_connection = os.getenv(
-        "APPLICATIONINSIGHTS_CONNECTION_STRING")
+    otel_exporter_endpoint = os.getenv(
+        "OTEL_EXPORTER_OTLP_ENDPOINT")
 
     if not all([cosmos_endpoint, cosmos_key, database_name, foundry_project_endpoint]):
         print("Error: Missing required environment variables.")
         print("Required: COSMOS_ENDPOINT, COSMOS_KEY, COSMOS_DATABASE_NAME, AI_FOUNDRY_PROJECT_ENDPOINT")
         return
 
-    configure_azure_monitor(
-        connection_string=app_insights_connection,
-        resource=create_resource(),  # Uses OTEL_SERVICE_NAME, etc.
-        enable_live_metrics=True,
-    )
-    enable_instrumentation(enable_sensitive_data=True)
+    if otel_exporter_endpoint:
+        configure_otel_providers()
+    else:
+        configure_azure_monitor(
+            connection_string=os.getenv(
+                "APPLICATIONINSIGHTS_CONNECTION_STRING"),
+            resource=create_resource(),  # Uses OTEL_SERVICE_NAME, etc.
+        )
+        enable_instrumentation(enable_sensitive_data=True)
 
     cosmos_service = CosmosDbService(
         cosmos_endpoint, cosmos_key, database_name)

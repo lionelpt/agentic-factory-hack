@@ -40,7 +40,7 @@ public sealed class TextOnlyAgentExecutor : Executor<string, string>
         _onStepCompleted = callback;
     }
 
-    public TextOnlyAgentExecutor(AIAgent agent) : base($"TextOnly-{agent.Name}")
+    public TextOnlyAgentExecutor(AIAgent agent) : base($"{agent.Name}")
     {
         _agent = agent ?? throw new ArgumentNullException(nameof(agent));
     }
