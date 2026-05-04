@@ -7,9 +7,6 @@ echo "🔧 Setting up .NET environment for Challenge 2 and 4..."
 echo "📦 Installing .NET Aspire..."
 curl -fsSL https://aspire.dev/install.sh | bash -s
 
-echo "🔐 Trusting ASP.NET Core HTTPS development certificate..."
-dotnet dev-certs https -t
-
 echo "✅ .NET environment setup complete!"
 echo "📌 .NET SDK $(dotnet --version) is ready"
 echo "📦 All required NuGet packages are cached and ready to use"
