@@ -12,6 +12,9 @@
     },
     "workbench.editorAssociations": {
         "*.md": "vscode.markdown.preview.editor"
+    },
+    "python.defaultInterpreterPath": "/workspaces/agentic-factory-hack/challenge-1/.venv/bin/python",
+    "python.terminal.activateEnvironment": true
     }
 
 }

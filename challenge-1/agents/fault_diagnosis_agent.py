@@ -1,28 +1,81 @@
+
 import asyncio
 import os
 
+import requests
 from azure.ai.projects import AIProjectClient
 from azure.ai.projects.models import MCPTool, PromptAgentDefinition
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv
 
+
+def get_required_env(name: str) -> str:
+    """Return a required environment variable or raise a clear error."""
+    value = os.environ.get(name)
+    if not value:
+        raise ValueError(f"Missing required environment variable: {name}")
+    return value
+
+
 load_dotenv(override=True)
-project_endpoint = os.environ.get("AZURE_AI_PROJECT_ENDPOINT")
-model_name = os.environ.get("MODEL_DEPLOYMENT_NAME")
+project_endpoint = get_required_env("AZURE_AI_PROJECT_ENDPOINT")
+model_name = get_required_env("MODEL_DEPLOYMENT_NAME")
 
 # Configuration
-knowledge_base_name = 'machine-kb'
-search_endpoint = os.environ.get("SEARCH_SERVICE_ENDPOINT")
-machine_wiki_mcp_endpoint = f"{search_endpoint}knowledgebases/{knowledge_base_name}/mcp?api-version=2025-11-01-preview"
-machine_data_mcp_endpoint = os.environ.get("MACHINE_MCP_SERVER_ENDPOINT")
-apim_subscription_key = os.environ.get("APIM_SUBSCRIPTION_KEY")
+knowledge_base_name = "machine-kb"
+search_endpoint = get_required_env("SEARCH_SERVICE_ENDPOINT").rstrip("/") + "/"
+machine_wiki_mcp_endpoint = (
+    f"{search_endpoint}knowledgebases/{knowledge_base_name}/mcp?api-version=2025-11-01-preview"
+)
+machine_data_mcp_endpoint = get_required_env("MACHINE_MCP_SERVER_ENDPOINT")
+apim_subscription_key = get_required_env("APIM_SUBSCRIPTION_KEY")
 
+
+project_resource_id = get_required_env("AZURE_AI_PROJECT_RESOURCE_ID")
+machine_data_connection_name = "machine-data-connection"
+machine_wiki_connection_name = "machine-wiki-connection"
+
+
+def create_apim_mcp_connection(connection_name, mcp_endpoint):
+    """Create APIM MCP connection with subscription key credentials"""
+    credential = DefaultAzureCredential()
+    bearer_token_provider = get_bearer_token_provider(
+        credential, "https://management.azure.com/.default")
+    headers = {
+        "Authorization": f"Bearer {bearer_token_provider()}",
+    }
+
+    response = requests.put(
+        f"https://management.azure.com{project_resource_id}/connections/{connection_name}?api-version=2025-10-01-preview",
+        headers=headers,
+        json={
+            "name": connection_name,
+            "type": "Microsoft.MachineLearningServices/workspaces/connections",
+            "properties": {
+                "authType": "CustomKeys",
+                "category": "RemoteTool",
+                "target": mcp_endpoint,
+                "isSharedToAll": True,
+                "credentials": {"keys": {"Ocp-Apim-Subscription-Key": apim_subscription_key}},
+                "metadata": {"type": "custom_MCP"}
+            }
+        },
+        timeout=30,
+    )
+
+    response.raise_for_status()
+    print(f"✅ Connection '{connection_name}' created successfully.")
 
 async def main():
     try:
+        # Register APIM MCP servers as project connections
+        create_apim_mcp_connection(
+            connection_name=machine_data_connection_name, mcp_endpoint=machine_data_mcp_endpoint)
+        create_apim_mcp_connection(
+            connection_name=machine_wiki_connection_name, mcp_endpoint=machine_wiki_mcp_endpoint)
 
         project_client = AIProjectClient(
-            endpoint=project_endpoint, credential=DefaultAzureCredential())
+            endpoint=project_endpoint, credential=azure.identity.DefaultAzureCredential())
         agent = project_client.agents.create_version(
             agent_name="FaultDiagnosisAgent",
             description="Fault diagnosis agent",
@@ -68,14 +121,14 @@ Grounding rules (IMPORTANT):
                         server_label="machine-data",
                         server_url=machine_data_mcp_endpoint,
                         require_approval="never",
-                        project_connection_id="machine-data-connection"
+                        project_connection_id=machine_data_connection_name
                     ),
 
                     MCPTool(
                         server_label="machine-wiki",
                         server_url=machine_wiki_mcp_endpoint,
                         require_approval="never",
-                        project_connection_id="machine-wiki-connection"
+                        project_connection_id=machine_wiki_connection_name
                     )
 
                 ]

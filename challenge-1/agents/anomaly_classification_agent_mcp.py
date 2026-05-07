@@ -7,21 +7,38 @@ from azure.ai.projects.models import MCPTool, PromptAgentDefinition
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv
 
+
+def get_required_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise ValueError(f"Missing required environment variable: {name}")
+    return value
+
+
 # Configuration
 load_dotenv(override=True)
-project_endpoint = os.environ.get("AZURE_AI_PROJECT_ENDPOINT")
-project_resource_id = os.environ.get("AZURE_AI_PROJECT_RESOURCE_ID")
-model_name = os.environ.get("MODEL_DEPLOYMENT_NAME")
+project_endpoint = get_required_env("AZURE_AI_PROJECT_ENDPOINT")
+project_resource_id = get_required_env("AZURE_AI_PROJECT_RESOURCE_ID")
+model_name = get_required_env("MODEL_DEPLOYMENT_NAME")
 
 
 # MCP configuration
-mcp_endpoint = os.environ.get("MACHINE_MCP_SERVER_ENDPOINT")
-apim_subscription_key = os.environ.get("APIM_SUBSCRIPTION_KEY")
+mcp_endpoint = get_required_env("MACHINE_MCP_SERVER_ENDPOINT")
+apim_subscription_key = get_required_env("APIM_SUBSCRIPTION_KEY")
 machine_data_connection_name = "machine-data-connection"
 maintenance_data_connection_name = "maintenance-data-connection"
-machine_data_mcp_endpoint = os.environ.get("MACHINE_MCP_SERVER_ENDPOINT")
-maintenance_data_mcp_endpoint = os.environ.get(
+machine_data_mcp_endpoint = get_required_env("MACHINE_MCP_SERVER_ENDPOINT")
+maintenance_data_mcp_endpoint = get_required_env(
     "MAINTENANCE_MCP_SERVER_ENDPOINT")
+
+# DRY_RUN mode: set DRY_RUN=1 to skip network/API calls and agent creation
+DRY_RUN = os.environ.get("DRY_RUN", "0") == "1"
+
+
+class DummyAgent:
+    def __init__(self, name="dry-run-agent"):
+        self.id = "dry-run-agent-id"
+        self.name = name
 
 
 def create_apim_mcp_connection(connection_name, mcp_endpoint):
@@ -48,10 +65,11 @@ def create_apim_mcp_connection(connection_name, mcp_endpoint):
                 "category": "RemoteTool",
                 "target": mcp_endpoint,
                 "isSharedToAll": True,
-                "credentials":  {"keys": {"Ocp-Apim-Subscription-Key": os.environ.get("APIM_SUBSCRIPTION_KEY")}},
+                "credentials":  {"keys": {"Ocp-Apim-Subscription-Key": apim_subscription_key}},
                 "metadata": {"type": "custom_MCP"}
             }
-        }
+        },
+        timeout=30,
     )
 
     response.raise_for_status()
@@ -62,19 +80,24 @@ def create_apim_mcp_connection(connection_name, mcp_endpoint):
 async def main():
     try:
         # Register APIM MCP servers as project connection
-        create_apim_mcp_connection(
-            connection_name="machine-data-connection", mcp_endpoint=machine_data_mcp_endpoint)
-        create_apim_mcp_connection(
-            connection_name="maintenance-data-connection", mcp_endpoint=maintenance_data_mcp_endpoint)
+        if not DRY_RUN:
+            create_apim_mcp_connection(
+                connection_name="machine-data-connection", mcp_endpoint=machine_data_mcp_endpoint)
+            create_apim_mcp_connection(
+                connection_name="maintenance-data-connection", mcp_endpoint=maintenance_data_mcp_endpoint)
+        else:
+            print("DRY_RUN=1: skipping creation of APIM MCP connections")
 
         # Create Agent
         project_client = AIProjectClient(
             endpoint=project_endpoint, credential=DefaultAzureCredential())
-        agent = project_client.agents.create_version(
-            agent_name="AnomalyClassificationAgent",
-            description="Anomaly classification agent",
-            definition=PromptAgentDefinition(
-                model=model_name,
+
+        if not DRY_RUN:
+            agent = project_client.agents.create_version(
+                agent_name="AnomalyClassificationAgent",
+                description="Anomaly classification agent",
+                definition=PromptAgentDefinition(
+                    model=model_name,
                 instructions="""You are a Anomaly Classification Agent evaluating machine anomalies for warning and critical threshold violations.
                         You will receive anomaly data for a given machine. Your task is to:
                         - Validate each metric against the threshold values 
@@ -120,7 +143,10 @@ async def main():
 
         )
 
-        print(f"✅ Created Anomaly Classification Agent: {agent.id}")
+            print(f"✅ Created Anomaly Classification Agent: {agent.id}")
+        else:
+            agent = DummyAgent(name="AnomalyClassificationAgent-dryrun")
+            print(f"DRY_RUN=1: simulated creation of agent: {agent.name}")
 
         # Test the agent with a simple query
         print("\n🧪 Testing the agent with a sample query...")
